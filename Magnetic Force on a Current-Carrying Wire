@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<!-- 
+===========================================================================
+ชื่อโปรเจค (Project Name): แบบจำลอง 3 มิติ แรงแม่เหล็กกระทำต่อลวดตัวนำที่มีกระแสไฟฟ้าผ่าน
+                       (Magnetic Force on a Current-Carrying Wire 3D Simulation)
+พัฒนาโดย (Developer)  : Gemini AI
+ให้เครดิต (Credit)     : OpenSimLab.org
+
+รายละเอียด (Description):
+เว็บแอปพลิเคชันเพื่อการศึกษาแบบอินเทอร์แอกทีฟ สำหรับจำลองและอธิบายปรากฏการณ์ทางฟิสิกส์
+เรื่องแรงแม่เหล็กที่กระทำต่อลวดตัวนำ เมื่อมีกระแสไฟฟ้าไหลผ่านบริเวณที่มีสนามแม่เหล็ก
+ผู้เรียนสามารถปรับค่าตัวแปรต่างๆ และสังเกตทิศทางของเวกเตอร์ (I, B, F) 
+ตาม "กฎมือขวา (Right-Hand Rule)" ได้แบบ Real-time พร้อมทั้งดูวิธีทำอย่างละเอียด
+
+เทคโนโลยีที่ใช้ (Technologies Used):
+- Three.js & CSS2DRenderer : สำหรับเรนเดอร์ภาพ 3 มิติและป้ายกำกับเวกเตอร์
+- MathJax                  : สำหรับเรนเดอร์สมการคณิตศาสตร์และสูตรคำนวณ
+- Tailwind CSS             : สำหรับจัดการ UI ให้ตอบสนองต่อทุกหน้าจอ (Responsive)
+- Vanilla JavaScript       : สำหรับจัดการ State, i18n (ระบบสองภาษา) และตรรกะทั้งหมด
+===========================================================================
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magnetic Force on a Current-Carrying Wire - OpenSimLab</title>
+    <!-- Tailwind CSS for rapid styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js Library for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera manipulation (rotate, pan, zoom) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- CSS2DRenderer for rendering HTML labels accurately in 3D space -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+    
+    <!-- MathJax Configuration for rendering LaTeX mathematical equations -->
+    <script>
+        MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <style>
+        /* Import necessary fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Lora:ital@1&display=swap');
+        
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+        }
+
+        /* Font specialized for mathematical variables to distinguish them from standard text */
+        .math-font {
+            font-family: 'Lora', serif;
+        }
+
+        /* Container for the 3D WebGL Canvas */
+        #canvas-container {
+            width: 100%;
+            height: 450px;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
+            background-color: #0f172a;
+            position: relative;
+        }
+
+        /* 3D Label Styling - Used by CSS2DRenderer */
+        .vector-label {
+            font-family: 'Lora', serif;
+            font-style: italic;
+            font-weight: bold;
+            font-size: 1.25rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            pointer-events: none; /* Prevent label from blocking orbit controls */
+            user-select: none;
+            margin-top: -15px; /* Offset to float slightly above arrow head */
+        }
+        
+        /* Individual label colors to match their respective 3D vectors */
+        .label-i { color: #eab308; border-left: 3px solid #eab308; }
+        .label-b { color: #3b82f6; border-left: 3px solid #3b82f6; }
+        .label-f { color: #ef4444; border-left: 3px solid #ef4444; }
+        .label-theta { color: #9333ea; border-left: 3px solid #9333ea; font-size: 1rem; margin-top: 0; }
+
+        /* Custom styling for range input sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            margin-top: -7px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 5px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        
+        .math-calculation-box {
+            font-size: 1.1rem;
+            line-height: 2;
+        }
+
+        /* Language Toggle Button Styles based on user's image */
+        .lang-toggle-container {
+            background-color: #f1f5f9; /* Light slate */
+            padding: 4px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+        }
+        .lang-btn {
+            padding: 4px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            transition: all 0.2s ease-in-out;
+        }
+        .lang-btn.active {
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .lang-btn.inactive {
+            background-color: transparent;
+            color: #94a3b8; /* Slate 400 */
+        }
+        .lang-btn-en.active { color: #475569; } /* Dark slate for EN */
+        .lang-btn-th.active { color: #f97316; } /* Orange for TH */
+        
+    </style>
+</head>
+<body class="antialiased">
+
+<div class="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
+    
+    <!-- Header with Title and Language Toggle -->
+    <header class="mb-8 border-b pb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="text-center md:text-left">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-2 tracking-tight" data-i18n="title">Magnetic Force on a Current-Carrying Wire</h1>
+            <p class="text-slate-600 text-lg" data-i18n="subtitle">Interactive 3D Physics Simulation</p>
+        </div>
+        
+        <!-- Language Toggle UI -->
+        <div class="lang-toggle-container shadow-sm border border-slate-200">
+            <button id="btn-lang-en" onclick="setLanguage('en')" class="lang-btn lang-btn-en active">EN</button>
+            <button id="btn-lang-th" onclick="setLanguage('th')" class="lang-btn lang-btn-th inactive">TH</button>
+        </div>
+    </header>
+
+    <!-- Theory Section (Top) -->
+    <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 mb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <!-- Theory Description -->
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-4 flex items-center">
+                    <svg class="w-7 h-7 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                    <span data-i18n="theoryTitle">Principles and Mathematical Equations</span>
+                </h2>
+                <p class="mb-4 text-slate-700 leading-relaxed text-lg" data-i18n="theoryDesc">
+                    When a current-carrying wire is placed in a magnetic field, it experiences a <b>magnetic force (<span class='math-font'>F</span>)</b>. The direction of the force can be determined using the <b>Right-Hand Rule</b>, and its magnitude is calculated using the equation:
+                </p>
+                <!-- Mathematical Equations rendered by MathJax -->
+                <div class="text-center my-6 py-4 bg-slate-50 rounded-lg border border-slate-100 text-2xl overflow-x-auto">
+                    $$ \vec{F} = I(\vec{L} \times \vec{B}) $$
+                    $$ F = I L B \sin(\theta) $$
+                </div>
+                
+                <div class="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200 text-sm shadow-sm text-slate-700" data-i18n="history">
+                    <span class='font-bold text-amber-800'>History of Discovery:</span> The principle of magnetic force acting on electric charges and current-carrying wires was developed and discovered by <b>André-Marie Ampère</b>, who found the relationship of forces between current-carrying wires, and <b>Hendrik Lorentz</b>, who formulated the Lorentz force equation ($F = qv \times B$), which is the foundation for the calculations in this simulation.
+                </div>
+            </div>
+            
+            <!-- Variables & Right-Hand Rule Explanation -->
+            <div class="bg-blue-50 p-6 rounded-xl border border-blue-100">
+                <h3 class="font-bold text-blue-900 mb-3 text-lg" data-i18n="variablesTitle">Variables in the Equation:</h3>
+                <ul class="text-slate-700 space-y-3 text-base">
+                    <li data-i18n="varF"><span class='math-font font-bold text-red-600'>F</span> = Magnetic Force Magnitude (Newton, N)</li>
+                    <li data-i18n="varI"><span class='math-font font-bold text-yellow-600'>I</span> = Electric Current (Ampere, A)</li>
+                    <li data-i18n="varL"><span class='math-font font-bold text-slate-800'>L</span> = Length of wire in the magnetic field (Meter, m)</li>
+                    <li data-i18n="varB"><span class='math-font font-bold text-blue-600'>B</span> = Magnetic Field Intensity (Tesla, T)</li>
+                    <li data-i18n="varTheta"><span class='math-font font-bold'>θ</span> = Angle between the direction of current (<span class='math-font'>I</span>) and magnetic field (<span class='math-font'>B</span>)</li>
+                </ul>
+                
+                <div class="mt-5 p-4 bg-white rounded-lg border border-slate-200 text-sm shadow-sm">
+                    <h4 class="font-bold text-slate-800 mb-2 flex items-center">
+                        <svg class="w-5 h-5 mr-1 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"></path></svg>
+                        <span data-i18n="rhrTitle">How to use the Right-Hand Rule:</span>
+                    </h4>
+                    <p class="text-slate-600 leading-relaxed" data-i18n="rhrDesc">Point your four fingers in the direction of the current (<span class='math-font'>I</span>), then curl them towards the direction of the magnetic field (<span class='math-font'>B</span>). Your thumb will point in the direction of the force (<span class='math-font'>F</span>).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Simulation & Controls Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Column: 3D Simulation (Spans 8) -->
+        <div class="lg:col-span-8 flex flex-col space-y-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col">
+                
+                <!-- View Controls Toolbar -->
+                <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
+                    <h2 class="text-xl font-bold text-slate-800" data-i18n="simTitle">3D Simulation</h2>
+                    <div class="flex space-x-2">
+                        <button onclick="setCameraView('top')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded transition" data-i18n="btnTop">Top</button>
+                        <button onclick="setCameraView('front')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded transition" data-i18n="btnFront">Front</button>
+                        <button onclick="setCameraView('side')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded transition" data-i18n="btnSide">Side</button>
+                        <button onclick="setCameraView('reset')" class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm font-semibold rounded transition" data-i18n="btnReset">Reset</button>
+                    </div>
+                </div>
+                
+                <!-- 3D Canvas Container -->
+                <div id="canvas-container" class="flex-grow">
+                    <!-- Legend UI overlaying the 3D scene -->
+                    <div class="absolute bottom-4 left-4 bg-white/95 p-3 rounded-lg text-sm shadow-md pointer-events-none border border-slate-100">
+                        <div class="font-bold text-slate-700 mb-2 border-b pb-1" data-i18n="legendTitle">Legend</div>
+                        <div class="flex items-center mb-1.5"><span class="w-3 h-3 rounded-full bg-yellow-400 mr-2 shadow-sm"></span> <span data-i18n="legendI">Electric Current</span> (<span class="math-font">I</span>)</div>
+                        <div class="flex items-center mb-1.5"><span class="w-3 h-3 rounded-full bg-blue-500 mr-2 shadow-sm"></span> <span data-i18n="legendB">Magnetic Field</span> (<span class="math-font">B</span>)</div>
+                        <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-red-500 mr-2 shadow-sm"></span> <span data-i18n="legendF">Magnetic Force</span> (<span class="math-font">F</span>)</div>
+                    </div>
+                    
+                    <!-- Axis Information Overlay -->
+                    <div class="absolute top-4 right-4 bg-white/90 px-2 py-1 rounded text-xs shadow-sm pointer-events-none border border-slate-100 text-slate-500 font-mono" data-i18n="axisInfo">
+                        Axis: <span class='text-red-500'>X</span>, <span class='text-green-500'>Y</span>, <span class='text-blue-500'>Z</span>
+                    </div>
+                </div>
+                
+                <div class="mt-3 text-center text-sm text-slate-500" data-i18n="hint">
+                    * Left-click and drag to rotate, scroll to zoom, right-click and drag to pan
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Controls (Spans 4) -->
+        <div class="lg:col-span-4 flex flex-col space-y-6">
+            
+            <!-- Inputs/Sliders Panel -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full">
+                <h2 class="text-xl font-bold text-slate-800 mb-5 border-b pb-3" data-i18n="ctrlTitle">Adjust Variables</h2>
+                
+                <div class="space-y-6">
+                    <!-- Current (I) Slider -->
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="font-medium text-slate-700" data-i18n="lblI">Electric Current (<span class='math-font'>I</span>)</label>
+                            <span class="text-yellow-600 font-bold bg-yellow-50 px-2 rounded"><span id="valI">5.0</span> A</span>
+                        </div>
+                        <input type="range" id="sliderI" min="0" max="10" step="0.5" value="5">
+                    </div>
+
+                    <!-- Magnetic Field (B) Slider -->
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="font-medium text-slate-700" data-i18n="lblB">Magnetic Field (<span class='math-font'>B</span>)</label>
+                            <span class="text-blue-600 font-bold bg-blue-50 px-2 rounded"><span id="valB">2.0</span> T</span>
+                        </div>
+                        <input type="range" id="sliderB" min="0" max="5" step="0.2" value="2">
+                    </div>
+                    
+                    <!-- Wire Length (L) Slider -->
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="font-medium text-slate-700" data-i18n="lblL">Wire Length (<span class='math-font'>L</span>)</label>
+                            <span class="text-slate-800 font-bold bg-slate-100 px-2 rounded"><span id="valL">1.0</span> m</span>
+                        </div>
+                        <input type="range" id="sliderL" min="0.1" max="3" step="0.1" value="1">
+                    </div>
+
+                    <!-- Angle (Theta) Slider -->
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="font-medium text-slate-700" data-i18n="lblTheta">Angle between <span class='math-font'>I</span> and <span class='math-font'>B</span> (θ)</label>
+                            <span class="text-purple-600 font-bold bg-purple-50 px-2 rounded"><span id="valTheta">90</span>°</span>
+                        </div>
+                        <input type="range" id="sliderTheta" min="0" max="180" step="5" value="90">
+                        <div class="flex justify-between text-xs text-slate-400 mt-1">
+                            <span data-i18n="angle0">0° (Parallel)</span>
+                            <span data-i18n="angle90">90° (Perpendicular)</span>
+                            <span data-i18n="angle180">180° (Anti-parallel)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Detailed Calculation Box (Bottom) -->
+    <div class="mt-6 bg-gradient-to-br from-slate-800 to-slate-900 p-6 md:p-8 rounded-2xl shadow-md text-white">
+        <h2 class="text-xl font-bold mb-4 flex items-center border-b border-slate-700 pb-3">
+            <svg class="w-6 h-6 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            <span data-i18n="calcTitle">Detailed Step-by-Step Calculation</span>
+        </h2>
+        
+        <!-- JavaScript will dynamically render HTML math here based on input values -->
+        <div class="math-calculation-box font-mono overflow-x-auto" id="math-output"></div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-12 text-center text-slate-500 text-sm pb-8 border-t pt-6">
+        <p data-i18n="subtitle">Interactive 3D Physics Simulation</p>
+        <p class="mt-2 font-medium">
+            Credit: <a href="https://opensimlab.org" target="_blank" class="text-blue-600 hover:text-blue-800 transition">OpenSimLab.org</a> 
+        </p>
+        <p class="mt-1 text-xs text-slate-400" data-i18n="creditText">Developed by Gemini AI</p>
+    </footer>
+
+</div>
+
+<script>
+    /**
+     * ==========================================
+     * i18n Translation Dictionary
+     * Contains mappings for English and Thai
+     * ==========================================
+     */
+    const translations = {
+        en: {
+            title: "Magnetic Force on a Current-Carrying Wire",
+            subtitle: "Interactive 3D Physics Simulation",
+            theoryTitle: "Principles and Mathematical Equations",
+            theoryDesc: "When a current-carrying wire is placed in a magnetic field, it experiences a <b>magnetic force (<span class='math-font'>F</span>)</b>. The direction of the force can be determined using the <b>Right-Hand Rule</b>, and its magnitude is calculated using the equation:",
+            history: "<span class='font-bold text-amber-800'>History of Discovery:</span> The principle of magnetic force acting on electric charges and current-carrying wires was developed and discovered by <b>André-Marie Ampère</b>, who found the relationship of forces between current-carrying wires, and <b>Hendrik Lorentz</b>, who formulated the Lorentz force equation ($F = qv \\times B$), which is the foundation for the calculations in this simulation.",
+            variablesTitle: "Variables in the Equation:",
+            varF: "<span class='math-font font-bold text-red-600'>F</span> = Magnetic Force Magnitude (Newton, N)",
+            varI: "<span class='math-font font-bold text-yellow-600'>I</span> = Electric Current (Ampere, A)",
+            varL: "<span class='math-font font-bold text-slate-800'>L</span> = Length of wire in the magnetic field (Meter, m)",
+            varB: "<span class='math-font font-bold text-blue-600'>B</span> = Magnetic Field Intensity (Tesla, T)",
+            varTheta: "<span class='math-font font-bold'>θ</span> = Angle between the direction of current (<span class='math-font'>I</span>) and magnetic field (<span class='math-font'>B</span>)",
+            rhrTitle: "How to use the Right-Hand Rule:",
+            rhrDesc: "Point your four fingers in the direction of the current (<span class='math-font'>I</span>), then curl them towards the direction of the magnetic field (<span class='math-font'>B</span>). Your thumb will point in the direction of the force (<span class='math-font'>F</span>).",
+            simTitle: "3D Simulation",
+            btnTop: "Top",
+            btnFront: "Front",
+            btnSide: "Side",
+            btnReset: "Reset",
+            legendTitle: "Legend",
+            legendI: "Electric Current",
+            legendB: "Magnetic Field",
+            legendF: "Magnetic Force",
+            axisInfo: "Axis: <span class='text-red-500'>X</span>, <span class='text-green-500'>Y</span>, <span class='text-blue-500'>Z</span>",
+            hint: "* Left-click and drag to rotate, scroll to zoom, right-click and drag to pan",
+            ctrlTitle: "Adjust Variables",
+            lblI: "Electric Current (<span class='math-font'>I</span>)",
+            lblB: "Magnetic Field (<span class='math-font'>B</span>)",
+            lblL: "Wire Length (<span class='math-font'>L</span>)",
+            lblTheta: "Angle between <span class='math-font'>I</span> and <span class='math-font'>B</span> (θ)",
+            angle0: "0° (Parallel)",
+            angle90: "90° (Perpendicular)",
+            angle180: "180° (Anti-parallel)",
+            calcTitle: "Detailed Step-by-Step Calculation",
+            creditText: "Developed by Gemini AI",
+            // Strings specifically for the dynamic Math box
+            mathEqTitle: "From equation:",
+            mathSub: "Substitute variables:",
+            mathCalc: "Calculate product and angle:",
+            mathResult: "Conclusion of magnetic force magnitude:",
+            mathNewton: "Newtons (N)"
+        },
+        th: {
+            title: "แรงแม่เหล็กกระทำต่อลวดตัวนำที่มีกระแสไฟฟ้าผ่าน",
+            subtitle: "Interactive 3D Physics Simulation",
+            theoryTitle: "หลักการและสมการคณิตศาสตร์",
+            theoryDesc: "เมื่อลวดตัวนำที่มีกระแสไฟฟ้าไหลผ่าน เข้าไปอยู่ในบริเวณที่มีสนามแม่เหล็ก จะเกิด <b>แรงแม่เหล็ก (<span class='math-font'>F</span>)</b> กระทำต่อลวดนั้น ทิศทางของแรงสามารถหาได้จาก <b>กฎมือขวา (Right-Hand Rule)</b> และขนาดของแรงคำนวณได้จากสมการ:",
+            history: "<span class='font-bold text-amber-800'>ประวัติการค้นพบ:</span> หลักการของแรงแม่เหล็กที่กระทำต่อประจุไฟฟ้าและลวดตัวนำนี้ เป็นผลงานที่ถูกพัฒนาและคิดค้นโดย <b>อองเดร-มารี แอมแปร์ (André-Marie Ampère)</b> ผู้ค้นพบความสัมพันธ์ของแรงระหว่างลวดกระแสไฟฟ้า และ <b>เฮนดริก ลอเรนซ์ (Hendrik Lorentz)</b> ผู้คิดค้นสมการแรงลอเรนซ์ ($F = qv \\times B$) ซึ่งเป็นรากฐานของการคำนวณในแบบจำลองนี้",
+            variablesTitle: "ตัวแปรในสมการ:",
+            varF: "<span class='math-font font-bold text-red-600'>F</span> = ขนาดของแรงแม่เหล็ก (Newton, N)",
+            varI: "<span class='math-font font-bold text-yellow-600'>I</span> = กระแสไฟฟ้า (Ampere, A)",
+            varL: "<span class='math-font font-bold text-slate-800'>L</span> = ความยาวของลวดในบริเวณสนามแม่เหล็ก (Meter, m)",
+            varB: "<span class='math-font font-bold text-blue-600'>B</span> = ความเข้มสนามแม่เหล็ก (Tesla, T)",
+            varTheta: "<span class='math-font font-bold'>θ</span> = มุมระหว่างทิศของกระแสไฟฟ้า (<span class='math-font'>I</span>) กับสนามแม่เหล็ก (<span class='math-font'>B</span>)",
+            rhrTitle: "วิธีใช้กฎมือขวา:",
+            rhrDesc: "ชี้นิ้วทั้งสี่ไปตามทิศของกระแส (<span class='math-font'>I</span>) จากนั้นกำนิ้วไปหาทิศของสนามแม่เหล็ก (<span class='math-font'>B</span>) นิ้วหัวแม่มือจะชี้บอกทิศของแรง (<span class='math-font'>F</span>)",
+            simTitle: "3D Simulation",
+            btnTop: "ด้านบน",
+            btnFront: "ด้านหน้า",
+            btnSide: "ด้านข้าง",
+            btnReset: "รีเซ็ต",
+            legendTitle: "สัญลักษณ์ (Legend)",
+            legendI: "กระแสไฟฟ้า",
+            legendB: "สนามแม่เหล็ก",
+            legendF: "แรงแม่เหล็ก",
+            axisInfo: "แกน: <span class='text-red-500'>X</span>, <span class='text-green-500'>Y</span>, <span class='text-blue-500'>Z</span>",
+            hint: "* สามารถคลิกซ้ายลากเพื่อหมุน, สกอร์ลเมาส์เพื่อซูม, คลิกขวาลากเพื่อเลื่อนกล้อง",
+            ctrlTitle: "ปรับค่าตัวแปร",
+            lblI: "กระแสไฟฟ้า (<span class='math-font'>I</span>)",
+            lblB: "สนามแม่เหล็ก (<span class='math-font'>B</span>)",
+            lblL: "ความยาวลวด (<span class='math-font'>L</span>)",
+            lblTheta: "มุมระหว่าง <span class='math-font'>I</span> กับ <span class='math-font'>B</span> (θ)",
+            angle0: "0° (ขนาน)",
+            angle90: "90° (ตั้งฉาก)",
+            angle180: "180° (สวนทาง)",
+            calcTitle: "แสดงวิธีทำอย่างละเอียด",
+            creditText: "พัฒนาโดย Gemini AI",
+            // Strings specifically for the dynamic Math box
+            mathEqTitle: "จากสมการ:",
+            mathSub: "แทนค่าตัวแปร:",
+            mathCalc: "คำนวณผลคูณและมุม:",
+            mathResult: "สรุปขนาดของแรงแม่เหล็ก:",
+            mathNewton: "นิวตัน (N)"
+        }
+    };
+
+    /**
+     * ==========================================
+     * Application State & UI Integration
+     * ==========================================
+     */
+    let currentLang = 'en'; // Default language is English
+
+    // Holds the physics parameters updated by sliders
+    let state = {
+        I: 5.0,
+        B: 2.0,
+        L: 1.0,
+        Theta: 90
+    };
+
+    // Cache DOM Elements for fast access
+    const ui = {
+        valI: document.getElementById('valI'), sliderI: document.getElementById('sliderI'),
+        valB: document.getElementById('valB'), sliderB: document.getElementById('sliderB'),
+        valL: document.getElementById('valL'), sliderL: document.getElementById('sliderL'),
+        valTheta: document.getElementById('valTheta'), sliderTheta: document.getElementById('sliderTheta'),
+        mathOutput: document.getElementById('math-output')
+    };
+
+    /**
+     * Language Controller
+     * Updates all text nodes based on the data-i18n attribute and toggles button UI state
+     * @param {string} lang - 'en' or 'th'
+     */
+    function setLanguage(lang) {
+        currentLang = lang;
+        const dict = translations[lang];
+
+        // 1. Iterate over all elements with a data-i18n attribute and update their innerHTML
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (dict[key]) {
+                el.innerHTML = dict[key];
+            }
+        });
+
+        // 2. Update Toggle Button visual states
+        const btnEn = document.getElementById('btn-lang-en');
+        const btnTh = document.getElementById('btn-lang-th');
+        
+        if (lang === 'en') {
+            btnEn.className = "lang-btn lang-btn-en active";
+            btnTh.className = "lang-btn lang-btn-th inactive";
+        } else {
+            btnEn.className = "lang-btn lang-btn-en inactive";
+            btnTh.className = "lang-btn lang-btn-th active";
+        }
+
+        // 3. Force re-render of dynamic math calculations to update localized strings inside it
+        updateSimulation();
+    }
+
+
+    /**
+     * ==========================================
+     * Three.js Setup & Initialization
+     * ==========================================
+     */
+    const container = document.getElementById('canvas-container');
+    
+    // Scene creation with dark background
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a); // Matches Tailwind slate-900
+
+    // Camera setup (Perspective)
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    const defaultCameraPos = new THREE.Vector3(7, 5, 8);
+    camera.position.copy(defaultCameraPos);
+
+    // Standard WebGL Renderer for 3D objects
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    // CSS2DRenderer setup for rendering standard HTML labels tracked to 3D positions
+    // This allows text to remain crisp and readable regardless of camera angle
+    const labelRenderer = new THREE.CSS2DRenderer();
+    labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0px';
+    labelRenderer.domElement.style.pointerEvents = 'none'; // Critical: allows clicking through to WebGL canvas for orbiting
+    container.appendChild(labelRenderer.domElement);
+
+    // OrbitControls for mouse interaction (pan, zoom, rotate)
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Lighting (Ambient + Directional)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    // Helpers to visualize the 3D space (Axes and Grid)
+    const axesHelper = new THREE.AxesHelper(3);
+    scene.add(axesHelper);
+    const gridHelper = new THREE.GridHelper(10, 20, 0x334155, 0x1e293b);
+    gridHelper.position.y = -0.01; // Offset slightly to prevent z-fighting with objects at y=0
+    scene.add(gridHelper);
+
+    /**
+     * ==========================================
+     * 3D Object Construction
+     * ==========================================
+     */
+    
+    /**
+     * Helper to create an HTML label bound to the CSS2DRenderer
+     */
+    function createVectorLabel(text, className) {
+        const div = document.createElement('div');
+        div.className = `vector-label ${className}`;
+        div.innerHTML = `<span class="math-font">${text}</span>`;
+        return new THREE.CSS2DObject(div);
+    }
+
+    // --- 1. Magnetic Field (B) Vectors ---
+    // The main magnetic field is defined as pointing along the positive X-axis
+    const bColor = 0x3b82f6; // Blue
+    const bArrowsGroup = new THREE.Group();
+    scene.add(bArrowsGroup);
+    
+    // Main emphasized central arrow for B Field
+    const mainBArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 3, bColor, 0.5, 0.25);
+    const labelB = createVectorLabel('B', 'label-b');
+    labelB.position.set(3, 0.3, 0); // Offset to prevent overlap with arrow tip
+    mainBArrow.add(labelB);
+    bArrowsGroup.add(mainBArrow);
+
+    // Background arrows to visualize the uniform nature of the magnetic field
+    for(let z = -2.5; z <= 2.5; z+=2.5) {
+        for(let y = 0.5; y <= 2.5; y+=2) {
+            if(z === 0 && y === 0.5) continue; // Skip center to avoid cluttering main objects
+            const arr = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(-3, y, z), 6, 0x1e3a8a, 0.3, 0.15);
+            bArrowsGroup.add(arr);
+        }
+    }
+
+    // --- 2. The Current-Carrying Wire ---
+    const wireMat = new THREE.MeshPhongMaterial({ color: 0xb45309 }); // Copper color
+    const wireGeom = new THREE.CylinderGeometry(0.06, 0.06, 1, 16);
+    wireGeom.rotateX(Math.PI / 2); // Align cylinder along Z-axis initially instead of default Y-axis
+    const wireMesh = new THREE.Mesh(wireGeom, wireMat);
+    scene.add(wireMesh);
+
+    // Electric Current (I) Vector Arrow
+    const iColor = 0xeab308; // Yellow
+    const iArrow = new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,0), 2, iColor, 0.4, 0.2);
+    scene.add(iArrow);
+    const labelI = createVectorLabel('I', 'label-i');
+    scene.add(labelI);
+
+    // --- 3. Magnetic Force (F) Vector Arrow ---
+    const fColor = 0xef4444; // Red
+    const fArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 2, fColor, 0.6, 0.3);
+    scene.add(fArrow);
+    const labelF = createVectorLabel('F', 'label-f');
+    scene.add(labelF);
+
+    // --- 4. Theta (Angle) Arc Visualization ---
+    // Sector mesh (semi-transparent interior)
+    const thetaMat = new THREE.MeshBasicMaterial({ color: 0xc084fc, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+    const thetaSectorMesh = new THREE.Mesh(new THREE.BufferGeometry(), thetaMat);
+    scene.add(thetaSectorMesh);
+
+    // Arc line (outer boundary)
+    const thetaLineMat = new THREE.LineBasicMaterial({ color: 0x9333ea, linewidth: 2 });
+    const thetaLineMesh = new THREE.Line(new THREE.BufferGeometry(), thetaLineMat);
+    scene.add(thetaLineMesh);
+
+    // Angle label
+    const labelTheta = createVectorLabel('&theta;', 'label-theta');
+    scene.add(labelTheta);
+
+
+    /**
+     * ==========================================
+     * Core Simulation Logic
+     * ==========================================
+     */
+    
+    /**
+     * Renders the step-by-step mathematical breakdown in the UI panel.
+     * Extracts strings from the active translation dictionary for i18n support.
+     */
+    function updateMathCalculation(force, sinVal) {
+        const dict = translations[currentLang];
+        
+        const i_str = state.I.toFixed(1);
+        const l_str = state.L.toFixed(1);
+        const b_str = state.B.toFixed(1);
+        const theta_str = state.Theta;
+        const sin_str = sinVal.toFixed(3);
+        const f_str = force.toFixed(2);
+
+        let html = `
+            <div class="mb-2 text-slate-300">
+                ${dict.mathEqTitle} &nbsp; <span class="text-xl text-white math-font italic">F = I &middot; L &middot; B &middot; sin(&theta;)</span>
+            </div>
+            
+            <div class="mb-2 pl-4 border-l-2 border-slate-600">
+                ${dict.mathSub}
+                <div class="mt-1">
+                    <span class="text-white math-font italic">F</span> = 
+                    <span class="text-yellow-400">(${i_str} A)</span> &times; 
+                    <span class="text-slate-300">(${l_str} m)</span> &times; 
+                    <span class="text-blue-400">(${b_str} T)</span> &times; 
+                    <span class="text-purple-400">sin(${theta_str}&deg;)</span>
+                </div>
+            </div>
+            
+            <div class="mb-3 pl-4 border-l-2 border-slate-600">
+                ${dict.mathCalc}
+                <div class="mt-1">
+                    <span class="text-white math-font italic">F</span> = 
+                    <span class="text-slate-200">(${(state.I * state.L * state.B).toFixed(2)})</span> &times; 
+                    <span class="text-purple-400">(${sin_str})</span>
+                </div>
+            </div>
+            
+            <div class="mt-4 pt-3 border-t border-slate-700">
+                ${dict.mathResult}
+                <div class="text-3xl font-bold text-red-400 mt-2">
+                    <span class="math-font italic">F</span> = ${f_str} <span class="text-xl text-slate-300 font-normal">${dict.mathNewton}</span>
+                </div>
+            </div>
+        `;
+        
+        ui.mathOutput.innerHTML = html;
+    }
+
+    /**
+     * Master function called whenever an input slider changes.
+     * Recalculates vectors, applies rotations, handles visibility logic, and updates UI.
+     */
+    function updateSimulation() {
+        // 1. Process Math
+        const thetaRad = state.Theta * (Math.PI / 180);
+        let sinTheta = Math.sin(thetaRad);
+        
+        // Compensate for floating-point inaccuracy (e.g. sin(180) resulting in 1.22e-16)
+        if (Math.abs(sinTheta) < 0.0001) sinTheta = 0;
+        
+        const force = state.I * state.L * state.B * Math.abs(sinTheta);
+
+        // 2. Update UI Number displays
+        ui.valI.textContent = state.I.toFixed(1);
+        ui.valB.textContent = state.B.toFixed(1);
+        ui.valL.textContent = state.L.toFixed(1);
+        ui.valTheta.textContent = state.Theta;
+
+        updateMathCalculation(force, sinTheta);
+
+        // 3. Update 3D Geometry Vectors
+        
+        // Magnetic Field (B) is fixed pointing to +X.
+        
+        // Calculate Current Vector (I) direction.
+        // It lives on the X-Z plane. At 0 deg it aligns with +X. At 90 deg it points +Z.
+        const dirI = new THREE.Vector3(Math.cos(thetaRad), 0, Math.sin(thetaRad));
+        
+        // Rotate the visual wire mesh to align with Current (I) Vector using Quaternions
+        const defaultZ = new THREE.Vector3(0,0,1);
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(defaultZ, dirI.normalize());
+        wireMesh.setRotationFromQuaternion(quaternion);
+        wireMesh.scale.set(1, 1, state.L * 4); // Scale visual length appropriately
+        
+        // Update Current Arrow and Label
+        iArrow.setDirection(dirI.normalize());
+        if (state.I <= 0.1) {
+            iArrow.visible = false;
+            labelI.visible = false;
+        } else {
+            iArrow.visible = true;
+            labelI.visible = true;
+            const visLengthI = 1 + (state.I * 0.2); // Base + Dynamic length
+            iArrow.setLength(visLengthI, 0.4, 0.2);
+            // Translate label to sit at the tip of the arrow
+            labelI.position.copy(dirI).multiplyScalar(visLengthI).add(new THREE.Vector3(0, 0.4, 0));
+        }
+
+        // Update Magnetic Field Arrow and Label
+        if (state.B <= 0.1) {
+            mainBArrow.visible = false;
+            bArrowsGroup.visible = false;
+            labelB.visible = false;
+        } else {
+            mainBArrow.visible = true;
+            bArrowsGroup.visible = true;
+            labelB.visible = true;
+            const visLengthB = 2 + (state.B * 0.5);
+            mainBArrow.setLength(visLengthB, 0.5, 0.25);
+            labelB.position.set(visLengthB + 0.3, 0.4, 0); 
+        }
+
+        // --- Cross Product for Force Vector ---
+        // Formula: F = I x B
+        const vecI = dirI.clone().multiplyScalar(state.I);
+        const vecB = new THREE.Vector3(1, 0, 0).multiplyScalar(state.B);
+        const vecF = new THREE.Vector3().crossVectors(vecI, vecB);
+        
+        if (vecF.length() < 0.01) {
+            fArrow.visible = false;
+            labelF.visible = false;
+        } else {
+            fArrow.visible = true;
+            labelF.visible = true;
+            const dirF = vecF.clone().normalize();
+            fArrow.setDirection(dirF);
+            
+            // Limit max visual length of Force arrow to prevent it blowing up out of screen
+            const maxVisF = 6;
+            const visLengthF = Math.min(1 + (force * 0.15), maxVisF);
+            fArrow.setLength(visLengthF, 0.6, 0.3);
+            
+            // Place F label near tip
+            labelF.position.copy(dirF).multiplyScalar(visLengthF).add(new THREE.Vector3(0.2, 0.2, 0));
+        }
+
+        // --- Update visual Theta Arc (Angle Indicator) ---
+        if (state.Theta === 0 || state.I <= 0.1 || state.B <= 0.1) {
+            // Hide arc if angle is zero or required vectors are null
+            thetaSectorMesh.visible = false;
+            thetaLineMesh.visible = false;
+            labelTheta.visible = false;
+        } else {
+            thetaSectorMesh.visible = true;
+            thetaLineMesh.visible = true;
+            labelTheta.visible = true;
+
+            const radius = 1.2;
+            const segments = 32;
+            const vertices = [0, 0, 0]; // Start at origin for filled sector
+            const linePoints = [];
+
+            // Calculate points along the arc curve
+            for (let i = 0; i <= segments; i++) {
+                const t = (i / segments) * thetaRad;
+                const x = radius * Math.cos(t);
+                const z = radius * Math.sin(t);
+                vertices.push(x, 0, z);
+                linePoints.push(new THREE.Vector3(x, 0, z));
+            }
+
+            // Create index triangles for the sector mesh
+            const indices = [];
+            for (let i = 1; i <= segments; i++) {
+                indices.push(0, i, i + 1);
+            }
+
+            // Apply newly calculated geometries
+            if (thetaSectorMesh.geometry) thetaSectorMesh.geometry.dispose();
+            const sectorGeom = new THREE.BufferGeometry();
+            sectorGeom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            sectorGeom.setIndex(indices);
+            thetaSectorMesh.geometry = sectorGeom;
+
+            if (thetaLineMesh.geometry) thetaLineMesh.geometry.dispose();
+            thetaLineMesh.geometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+
+            // Position label exactly midway across the arc
+            const labelRadius = radius + 0.4;
+            labelTheta.position.set(
+                labelRadius * Math.cos(thetaRad / 2),
+                0.1, // Slight Y lift to prevent clipping with grid
+                labelRadius * Math.sin(thetaRad / 2)
+            );
+            labelTheta.element.innerHTML = `<span class="math-font">&theta; = ${state.Theta}&deg;</span>`;
+        }
+    }
+
+    /**
+     * ==========================================
+     * Event Listeners & Utilities
+     * ==========================================
+     */
+
+    // Attach event listeners to input sliders to trigger recalculation
+    ui.sliderI.addEventListener('input', (e) => { state.I = parseFloat(e.target.value); updateSimulation(); });
+    ui.sliderB.addEventListener('input', (e) => { state.B = parseFloat(e.target.value); updateSimulation(); });
+    ui.sliderL.addEventListener('input', (e) => { state.L = parseFloat(e.target.value); updateSimulation(); });
+    ui.sliderTheta.addEventListener('input', (e) => { state.Theta = parseInt(e.target.value); updateSimulation(); });
+
+    /**
+     * Manages predetermined camera viewing angles
+     */
+    window.setCameraView = function(view) {
+        const targetPos = new THREE.Vector3();
+        switch(view) {
+            case 'top': targetPos.set(0, 10, 0); break;
+            case 'front': targetPos.set(0, 0, 10); break;
+            case 'side': targetPos.set(10, 0, 0); break;
+            case 'reset': targetPos.copy(defaultCameraPos); break;
+        }
+        
+        camera.position.copy(targetPos);
+        camera.lookAt(0,0,0);
+        controls.target.set(0,0,0);
+        controls.update(); // Crucial: must update controls to match new camera position
+    };
+
+    // Handle responsive container resizing
+    window.addEventListener('resize', () => {
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        
+        renderer.setSize(width, height);
+        labelRenderer.setSize(width, height);
+    });
+
+    /**
+     * Main Animation/Render Loop
+     */
+    window.onload = function() {
+        setLanguage('en'); // Enforce default language on initialization
+        updateSimulation(); // Initial physics draw
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // Enable smooth damping for camera
+            renderer.render(scene, camera); // Render WebGL scene
+            labelRenderer.render(scene, camera); // Render synced HTML 2D overlay labels
+        }
+        animate();
+    };
+
+</script>
+</body>
+</html>
